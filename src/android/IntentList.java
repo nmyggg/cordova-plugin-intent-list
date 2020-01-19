@@ -21,9 +21,11 @@ import java.io.IOException;
 import java.io.ByteArrayOutputStream;
 import java.lang.CharSequence;
 import java.util.List;
+import java.util.Iterator;
 
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CallbackContext;
+import org.apache.cordova.PluginResult;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -36,6 +38,7 @@ import org.json.JSONObject;
 public class IntentList extends CordovaPlugin {
 
     public static final String ACTION_GET_INTENT_LIST = "getIntentList";
+    public static final String ACTION_GET_INTENT_LIST_ASYNC = "getIntentListAsync";
 
     // @see https://stackoverflow.com/a/10600736
     public static Bitmap drawableToBitmap (Drawable drawable) {
@@ -60,14 +63,18 @@ public class IntentList extends CordovaPlugin {
     @Override
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
         if (ACTION_GET_INTENT_LIST.equals(action)) {
-            getIntentList(callbackContext);
+            getIntentList(callbackContext, false);
+            return true;
+        }
+        else if (ACTION_GET_INTENT_LIST_ASYNC.equals(action)) {
+            getIntentList(callbackContext, true);
             return true;
         }
         callbackContext.error("Invalid action");
         return false;
     }
 
-    private void getIntentList(final CallbackContext callbackContext) {
+    private void getIntentList(final CallbackContext callbackContext, Boolean async) {
         cordova.getThreadPool().execute(new Runnable() {
             public void run() {
                 try {
@@ -76,9 +83,11 @@ public class IntentList extends CordovaPlugin {
                     mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
                     PackageManager packageManager = cordova.getActivity().getPackageManager();
                     List<ResolveInfo> resovleInfoList = packageManager.queryIntentActivities(mainIntent, 0);
+                    Iterator<ResolveInfo> resItr = resovleInfoList.iterator();
                     // Create JSON array for js results
                     JSONArray applicationsList = new JSONArray();
-                    for (ResolveInfo resolveInfo : resovleInfoList) {
+                    while (resItr.hasNext()) {
+                        ResolveInfo resolveInfo = resItr.next();
                         String packageName = resolveInfo.activityInfo.packageName; // Get Intent package name
                         CharSequence intentLabel = resolveInfo.loadLabel(packageManager); //这里获取的是应用名 //Keep original comment ;)
                         Drawable appIcon = resolveInfo.loadIcon(packageManager); // Get Intent icon and convert it to base64
@@ -94,9 +103,14 @@ public class IntentList extends CordovaPlugin {
                         intentInfo.put("label", intentLabel);
                         intentInfo.put("package", packageName);
                         intentInfo.put("packageIcon", intentIconBase64);
-                        applicationsList.put(intentInfo);
+                        if (async) {
+                            PluginResult result = new PluginResult(PluginResult.Status.OK, intentInfo);
+                            result.setKeepCallback(resItr.hasNext() ? true : false);
+                            callbackContext.sendPluginResult(result);
+                        }
+                        else applicationsList.put(intentInfo);
                     }
-                    callbackContext.success(applicationsList);
+                    if (!async) callbackContext.success(applicationsList);
                 } catch (Exception e) {
                     System.err.println("Exception: " + e.getMessage());
                     callbackContext.error(e.getMessage());
