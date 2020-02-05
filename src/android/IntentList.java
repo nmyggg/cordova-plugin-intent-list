@@ -86,6 +86,32 @@ public class IntentList extends CordovaPlugin {
                     Iterator<ResolveInfo> resItr = resovleInfoList.iterator();
                     // Create JSON array for js results
                     JSONArray applicationsList = new JSONArray();
+                    // add play service
+                    try {
+                        String playServiceName = "com.google.android.gms";
+                        Drawable appIcon = packageManager.getApplicationIcon(playServiceName);
+                        CharSequence intentLabel = packageManager.getApplicationLabel(packageManager.getApplicationInfo(playServiceName, 0));
+                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                        Bitmap bitmap = drawableToBitmap(appIcon);
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, baos);
+                        byte[] intentImageBytes = baos.toByteArray();
+                        // Convert Intent icon to base64
+                        String intentIconBase64 = Base64.encodeToString(intentImageBytes, Base64.DEFAULT);
+                        intentIconBase64 = "data:image/jpeg;base64, " + intentIconBase64;
+                        // Create json object for current Intent
+                        JSONObject intentInfo = new JSONObject();
+                        intentInfo.put("label", intentLabel);
+                        intentInfo.put("package", playServiceName);
+                        intentInfo.put("packageIcon", intentIconBase64);
+                        if (async) {
+                            PluginResult result = new PluginResult(PluginResult.Status.OK, intentInfo);
+                            result.setKeepCallback(true);
+                            callbackContext.sendPluginResult(result);
+                        }
+                        else applicationsList.put(intentInfo);
+                    } catch (Exception e) {
+                        System.err.println("Exception: google play service can not find");
+                    }  
                     while (resItr.hasNext()) {
                         ResolveInfo resolveInfo = resItr.next();
                         String packageName = resolveInfo.activityInfo.packageName; // Get Intent package name
